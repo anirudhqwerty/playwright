@@ -66,6 +66,14 @@ if (process.argv[2] === '--mcp-child') {
   assert.equal(result.standalone.eventFired, true);
   assert.match(standaloneStderr, /MCP_LISTENER_SYNC_1803/);
 
+  if (process.argv[2] === '--standalone-only') {
+    fs.writeFileSync('evidence/standalone.json', JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result, null, 2));
+    server.closeAllConnections();
+    server.close();
+    process.exit(0);
+  }
+
   const transport = new StdioClientTransport({ command: process.execPath, args: [self, '--mcp-child'], stderr: 'pipe' });
   let stderr = '';
   let exited;

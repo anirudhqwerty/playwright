@@ -8,11 +8,14 @@ on:
       mode:
         required: true
         default: baseline
+      os:
+        required: true
+        default: ubuntu-latest
 permissions:
   contents: read
 jobs:
   reproduce:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.os }}
     timeout-minutes: 30
     env:
       UPSTREAM_SHA: a2b65a057a78204d8411b068e1e28d0db23db44b
@@ -52,13 +55,31 @@ jobs:
           test "$status" -eq 1
           node -e "const fs=require('fs');const s=fs.readFileSync('evidence/regression.json','utf8');const j=JSON.parse(s.slice(s.indexOf('{')));if(j.stats.unexpected!==1||j.stats.expected!==0)throw Error('Unexpected test counts');const text=JSON.stringify(j);if(!/Connection closed|connection.*closed/i.test(text))throw Error('Wrong regression failure');console.log(JSON.stringify(j.stats));"
       - name: Existing run-code regressions
+        if: inputs.mode == 'baseline'
         run: npm run test-mcp -- run-code --project=chromium --grep-invert 'listener exception after returning' --retries=0 --reporter=line
+        working-directory: source
+      - name: Ordinary Playwright listener still terminates its own child
+        if: inputs.mode == 'candidate'
+        run: node ../harness/investigation/reproduce.mjs --standalone-only
+        working-directory: source
+      - name: MCP callback, run-code and crash regressions
+        if: inputs.mode == 'candidate'
+        run: npm run test-mcp -- run-code crash --project=chromium --workers=2 --retries=0 --reporter=line
+        working-directory: source
+      - name: Public listener semantics and error scope cleanup
+        if: inputs.mode == 'candidate'
+        run: npm run ctest -- events/ --workers=2 --retries=0 --reporter=line
+        working-directory: source
+      - name: Repository lint and type checks
+        if: inputs.mode == 'candidate' && runner.os == 'Linux'
+        run: npm run flint
         working-directory: source
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: issue-1803-evidence
+          name: issue-1803-evidence-${{ runner.os }}
           path: |
             source/evidence
             source/test-results
+          include-hidden-files: true
           if-no-files-found: warn
