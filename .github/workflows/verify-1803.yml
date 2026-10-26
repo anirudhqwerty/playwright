@@ -71,7 +71,7 @@ jobs:
         run: npm run ctest -- events/ --workers=2 --retries=0 --reporter=line
         working-directory: source
       - name: Repository lint and type checks
-        if: inputs.mode == 'candidate' && runner.os == 'Linux'
+        if: (inputs.mode == 'candidate' || inputs.mode == 'checks') && runner.os == 'Linux'
         run: |
           npx playwright install --with-deps firefox webkit
           npm run flint
