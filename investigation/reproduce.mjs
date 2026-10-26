@@ -79,11 +79,13 @@ if (process.argv[2] === '--mcp-child') {
     await deadline(client.connect(transport));
     await deadline(client.callTool({ name: 'browser_navigate', arguments: { url } }));
     const registration = await deadline(client.callTool({ name: 'browser_run_code_unsafe', arguments: { code: `async page => {
+      page.__listenerEvents = [];
       page.on('requestfinished', request => {
+        page.__listenerEvents.push(request.url());
         if (!request.url().endsWith('/listener-trigger')) return;
         throw new TypeError('${marker}');
       });
-      await page.evaluate(() => { void fetch('/listener-trigger'); });
+      await page.evaluate(() => { void fetch('/listener-trigger').then(response => response.text()); });
       return 'registered';
     }` } }));
     assert.equal(!!registration.isError, false);
@@ -92,7 +94,15 @@ if (process.argv[2] === '--mcp-child') {
     await deadline(held);
     result.triggerReleasedAfterRegistration = true;
     release();
-    await deadline(exit);
+    const outcome = await Promise.race([exit.then(() => 'exit'), new Promise(resolve => setTimeout(() => resolve('diagnose'), 3000))]);
+    if (outcome === 'diagnose') {
+      try {
+        result.diagnostics = await deadline(client.callTool({ name: 'browser_run_code_unsafe', arguments: { code: `async page => ({ events: page.__listenerEvents, count: page.listenerCount('requestfinished'), url: page.url() })` } }));
+      } catch (error) {
+        result.diagnosticError = String(error);
+      }
+    }
+    await deadline(exit, 5000);
     result.eventFired = stderr.includes(marker);
     result.childExit = JSON.parse(stderr.match(/CHILD_EXIT (\{[^\n]+\})/)[1]);
     try {
