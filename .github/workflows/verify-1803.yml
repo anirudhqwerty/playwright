@@ -1,0 +1,64 @@
+name: Issue 1803 isolated investigation
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        required: true
+        default: 89a21718459aa964b283521495a5184505770331
+      mode:
+        required: true
+        default: baseline
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      UPSTREAM_SHA: a2b65a057a78204d8411b068e1e28d0db23db44b
+      SOURCE_SHA: ${{ inputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: verify/mcp-1803
+          path: harness
+          sparse-checkout: investigation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source }}
+          path: source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: source
+      - run: npm run build
+        working-directory: source
+      - run: npx playwright install --with-deps chromium
+        working-directory: source
+      - name: Assert standalone and MCP baseline crashes
+        if: inputs.mode == 'baseline'
+        run: node ../harness/investigation/reproduce.mjs
+        working-directory: source
+      - name: Assert regression fails for connection closure
+        if: inputs.mode == 'baseline'
+        working-directory: source
+        shell: bash
+        run: |
+          set +e
+          npm run test-mcp -- run-code --project=chromium --grep 'listener exception after returning' --retries=0 --reporter=json > evidence/regression.json 2> evidence/regression-stderr.log
+          status=$?
+          set -e
+          test "$status" -eq 1
+          node -e "const fs=require('fs');const s=fs.readFileSync('evidence/regression.json','utf8');const j=JSON.parse(s.slice(s.indexOf('{')));if(j.stats.unexpected!==1||j.stats.expected!==0)throw Error('Unexpected test counts');const text=JSON.stringify(j);if(!/Connection closed|connection.*closed/i.test(text))throw Error('Wrong regression failure');console.log(JSON.stringify(j.stats));"
+      - name: Existing run-code regressions
+        run: npm run test-mcp -- run-code --project=chromium --grep-invert 'listener exception after returning' --retries=0 --reporter=line
+        working-directory: source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-1803-evidence
+          path: |
+            source/evidence
+            source/test-results
+          if-no-files-found: warn
