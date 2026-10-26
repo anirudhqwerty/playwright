@@ -17,7 +17,7 @@ const deadline = (promise, ms = 20000) => {
 };
 
 if (process.argv[2] === '--mcp-child') {
-  const child = spawn(process.execPath, [path.resolve('packages/playwright-core/lib/entry/mcp.js'), '--headless', '--browser=chromium', '--isolated'], { stdio: 'inherit' });
+  const child = spawn(process.execPath, [path.resolve('packages/playwright-core/lib/entry/mcp.js'), '--headless', '--browser=chromium', '--user-data-dir=' + path.resolve('evidence/mcp-profile')], { stdio: 'inherit' });
   child.on('exit', (code, signal) => {
     console.error('CHILD_EXIT ' + JSON.stringify({ code, signal }));
     process.exit(code ?? 1);
