@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm run build
-      - run: npx playwright install --with-deps --only-shell webkit chromium
+      - run: npx playwright install --with-deps --only-shell webkit chromium firefox
       - name: Record real-browser behavior
         shell: bash
         run: |
@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          npm run test -- capabilities.spec.ts --project=webkit-library --grep 'CA-029|CA-030|CA-031' --workers=1 --retries=0 --reporter=line,json > evidence/webkit.log 2>&1
+          npm run test -- capabilities.spec.ts --project=webkit-library --grep 'CA-029|CA-032|CA-033' --workers=1 --retries=0 --reporter=line,json > evidence/webkit.log 2>&1
           result=$?
           set -e
           cat evidence/webkit.log
@@ -46,6 +46,7 @@ jobs:
           set -euo pipefail
           npm run ctest -- capabilities.spec.ts --grep 'CA-029' --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/chromium.log
       - name: Existing capabilities and credentials suites
+        if: "!contains(github.event.head_commit.message, '[linux-only]')"
         shell: bash
         run: |
           set -euo pipefail
@@ -54,14 +55,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          PWTEST_UPDATE_REGISTRY=1 npm run test -- --list --reporter=./tests/config/registryReporter.ts > evidence/registry-generation.log
           npm run flint 2>&1 | tee evidence/flint.log
           git diff --check
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-43711
-          path: evidence/
+          path: |
+            evidence/
+            tests/registry.md
   windows:
+    if: "!contains(github.event.head_commit.message, '[linux-only]')"
     runs-on: windows-latest
     timeout-minutes: 25
     env:
