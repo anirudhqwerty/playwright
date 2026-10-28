@@ -514,7 +514,7 @@ it('CA-030 PublicKeyCredential should be a function with mobile emulation', asyn
 it('CA-031 should preserve an existing PublicKeyCredential implementation', async ({ page, browserName, server, toImpl }) => {
   it.skip(browserName !== 'webkit');
   await page.goto(server.EMPTY_PAGE);
-  const script = toImpl(page)._delegate._publicKeyCredentialScript();
+  const script = toImpl(page).delegate._publicKeyCredentialScript();
   expect(await page.evaluate(script => {
     class ExistingPublicKeyCredential {}
     window.PublicKeyCredential = ExistingPublicKeyCredential as any;
