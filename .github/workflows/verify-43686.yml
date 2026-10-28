@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 jobs:
-  chrome:
-    runs-on: ubuntu-latest
+  windows-channels:
+    runs-on: windows-latest
     timeout-minutes: 20
     defaults:
       run:
@@ -18,38 +18,36 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm run build
-      - run: npx playwright install --with-deps chromium chrome
       - name: Record revision and browser versions
         run: |
           git rev-parse HEAD
           node --version
-          google-chrome --version
+          node -e "const {execFileSync}=require('child_process');for(const p of ['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe']) console.log(p,require('fs').existsSync(p));"
       - name: Run original scenario with raw response diagnostics
         run: |
           node investigation/pr43686.cjs baseline
-          set +e
-          npm run test-mcp -- run-code --project=chrome --grep 'browser_run_code_unsafe$' --retries=0 --reporter=line > evidence/original.log 2>&1
-          status=$?
-          set -e
-          cat evidence/original.log
-          printf '%s\n' "$status" > evidence/original-status.txt
-          test "$status" -eq 1
-          grep -F 'Received undefined' evidence/original.log
-      - name: Test body consumption hypothesis
+          for project in chrome msedge; do
+            set +e
+            npm run test-mcp -- run-code --project="$project" --grep 'browser_run_code_unsafe$' --retries=0 --reporter=line > "evidence/original-$project.log" 2>&1
+            status=$?
+            set -e
+            cat "evidence/original-$project.log"
+            printf '%s\n' "$status" > "evidence/original-$project-status.txt"
+            test "$status" -eq 1
+            grep -F 'Received undefined' "evidence/original-$project.log"
+          done
+      - name: Corrected scenario and delayed-event regression
         run: |
           node investigation/pr43686.cjs consume
-          npm run test-mcp -- run-code --project=chrome --grep 'browser_run_code_unsafe$' --retries=0 --reporter=line 2>&1 | tee evidence/consume.log
-      - name: Existing run-code and delayed-event regression
-        run: |
           node investigation/pr43686.cjs delayed
-          npm run test-mcp -- run-code --project=chrome --project=chromium --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/regressions.log
+          npm run test-mcp -- run-code --project=chrome --project=msedge --grep 'browser_run_code_unsafe$|reports delayed listener' --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/regressions.log
       - name: Save candidate diff
         if: always()
         run: git diff > evidence/candidate.diff
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pr43686-linux-evidence
+          name: pr43686-windows-evidence
           path: |
             evidence/
             test-results/
