@@ -1,0 +1,51 @@
+name: Verify WebKit PublicKeyCredential 43711
+on:
+  push:
+    branches: [verify/43711-webkit-publickeycredential]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PHASE: baseline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps --only-shell webkit chromium
+      - name: Record real-browser behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/revision.txt
+          node --version > evidence/node.txt
+          node investigation/43711/reproduce.cjs 2>&1 | tee evidence/browser-behavior.log
+      - name: New regressions on unchanged production code
+        shell: bash
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: evidence/webkit.json
+        run: |
+          set -euo pipefail
+          set +e
+          npm run test -- capabilities.spec.ts --project=webkit-library --grep 'CA-029|CA-030|CA-031' --workers=1 --retries=0 --reporter=line,json > evidence/webkit.log 2>&1
+          result=$?
+          set -e
+          cat evidence/webkit.log
+          echo "$result" > evidence/webkit-exit.txt
+          node investigation/43711/assert-result.cjs "$result"
+      - name: Chromium control
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run ctest -- capabilities.spec.ts --grep 'CA-029' --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/chromium.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-43711
+          path: evidence/
