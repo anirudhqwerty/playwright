@@ -9,7 +9,7 @@ jobs:
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      PHASE: baseline
+      PHASE: candidate
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,7 +26,7 @@ jobs:
           git rev-parse HEAD > evidence/revision.txt
           node --version > evidence/node.txt
           node investigation/43711/reproduce.cjs 2>&1 | tee evidence/browser-behavior.log
-      - name: New regressions on unchanged production code
+      - name: Focused regressions
         shell: bash
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: evidence/webkit.json
@@ -44,8 +44,85 @@ jobs:
         run: |
           set -euo pipefail
           npm run ctest -- capabilities.spec.ts --grep 'CA-029' --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/chromium.log
+      - name: Existing capabilities and credentials suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run wtest -- capabilities.spec.ts browsercontext-webauthn.spec.ts browsercontext-credentials.spec.ts --workers=2 --retries=0 --reporter=line 2>&1 | tee evidence/related.log
+      - name: Repository lint and type checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run flint 2>&1 | tee evidence/flint.log
+          git diff --check
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: linux-43711
+          path: evidence/
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Build baseline production with the same regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/revision.txt
+          node --version > evidence/node.txt
+          for file in packages/playwright-core/src/server/webkit/wkPage.ts packages/playwright-core/src/server/webkit/webview/wvPage.ts; do
+            git show f9a841f968dd9a4e315df2ec2930da1952971667:"$file" > "$file"
+          done
+          npm run build 2>&1 | tee evidence/baseline-build.log
+      - run: npx playwright install --with-deps --only-shell webkit chromium
+      - name: Windows baseline reproduction
+        shell: bash
+        env:
+          PHASE: baseline
+          PLAYWRIGHT_JSON_OUTPUT_FILE: evidence/webkit.json
+        run: |
+          set -euo pipefail
+          node investigation/43711/reproduce.cjs 2>&1 | tee evidence/baseline-browser-behavior.log
+          mv evidence/browser-behavior.json evidence/baseline-browser-behavior.json
+          set +e
+          npm run test -- capabilities.spec.ts --project=webkit-library --grep 'CA-029|CA-030|CA-031' --workers=1 --retries=0 --reporter=line,json > evidence/baseline-webkit.log 2>&1
+          result=$?
+          set -e
+          cat evidence/baseline-webkit.log
+          node investigation/43711/assert-result.cjs "$result"
+          mv evidence/webkit.json evidence/baseline-webkit.json
+      - name: Build candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore -- packages/playwright-core/src/server/webkit/wkPage.ts packages/playwright-core/src/server/webkit/webview/wvPage.ts
+          npm run build 2>&1 | tee evidence/candidate-build.log
+      - name: Windows candidate verification
+        shell: bash
+        env:
+          PHASE: candidate
+          PLAYWRIGHT_JSON_OUTPUT_FILE: evidence/webkit.json
+        run: |
+          set -euo pipefail
+          node investigation/43711/reproduce.cjs 2>&1 | tee evidence/candidate-browser-behavior.log
+          set +e
+          npm run test -- capabilities.spec.ts --project=webkit-library --grep 'CA-029|CA-030|CA-031' --workers=1 --retries=0 --reporter=line,json > evidence/candidate-webkit.log 2>&1
+          result=$?
+          set -e
+          cat evidence/candidate-webkit.log
+          node investigation/43711/assert-result.cjs "$result"
+          npm run ctest -- capabilities.spec.ts --grep 'CA-029' --workers=1 --retries=0 --reporter=line 2>&1 | tee evidence/chromium.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-43711
           path: evidence/
