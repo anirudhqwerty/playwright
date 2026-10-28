@@ -7,7 +7,11 @@ if (phase === 'baseline') {
   const source = fs.readFileSync(file, 'utf8');
   fs.writeFileSync('evidence/original-source.ts', source);
   assert.ok(source.includes('const listenerErrors = await consoleEntries(listenerResponse);'));
-  fs.writeFileSync(file, source.replace(
+  const registrationStart = "  await client.callTool({\n    name: 'browser_run_code_unsafe',\n    arguments: {\n      code: `(page) => {";
+  assert.ok(source.includes(registrationStart));
+  fs.writeFileSync(file, source.replace(registrationStart, registrationStart.replace('await client.callTool', 'const registrationResponse = await client.callTool')).replace(
+      '  const listenerResponse = parseResponse',
+      "  console.log('REGISTRATION_RESPONSE', JSON.stringify(registrationResponse));\n  const listenerResponse = parseResponse").replace(
       'const listenerErrors = await consoleEntries(listenerResponse);',
       `console.log('LISTENER_RESPONSE', JSON.stringify(listenerResponse));\n  const listenerErrors = await consoleEntries(listenerResponse);`));
 } else if (phase === 'consume') {
@@ -20,7 +24,7 @@ if (phase === 'baseline') {
   fs.appendFileSync(file, `
 
 test('browser_run_code_unsafe reports delayed listener errors without losing the session', async ({ client, server }) => {
-  let release;
+  let release: (() => void) | undefined;
   const arrived = new Promise<void>(resolve => {
     server.setRoute('/held-listener-trigger', async (_request, response) => {
       await new Promise<void>(fulfill => { release = fulfill; resolve(); });
@@ -44,7 +48,7 @@ test('browser_run_code_unsafe reports delayed listener errors without losing the
     expect(registration.isError).toBeFalsy();
     expect(JSON.stringify(registration)).toContain('registered before release');
     await arrived;
-    release();
+    release!();
     await expect.poll(async () => {
       const result = await client.callTool({ name: 'browser_run_code_unsafe', arguments: { code: 'page => page.__listenerFired' } });
       expect(result.isError).toBeFalsy();

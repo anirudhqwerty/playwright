@@ -28,7 +28,7 @@ jobs:
         run: |
           node investigation/pr43686.cjs baseline
           set +e
-          npm run test-mcp -- run-code --project=chrome --grep '^browser_run_code_unsafe$' --retries=0 --reporter=line > evidence/original.log 2>&1
+          npm run test-mcp -- run-code --project=chrome --grep 'browser_run_code_unsafe$' --retries=0 --reporter=line > evidence/original.log 2>&1
           status=$?
           set -e
           cat evidence/original.log
@@ -38,7 +38,7 @@ jobs:
       - name: Test body consumption hypothesis
         run: |
           node investigation/pr43686.cjs consume
-          npm run test-mcp -- run-code --project=chrome --grep '^browser_run_code_unsafe$' --retries=0 --reporter=line 2>&1 | tee evidence/consume.log
+          npm run test-mcp -- run-code --project=chrome --grep 'browser_run_code_unsafe$' --retries=0 --reporter=line 2>&1 | tee evidence/consume.log
       - name: Existing run-code and delayed-event regression
         run: |
           node investigation/pr43686.cjs delayed
