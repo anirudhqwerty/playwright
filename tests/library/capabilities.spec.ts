@@ -503,7 +503,7 @@ it('CA-029 should not crash on feature detection for PublicKeyCredential', {
   });
 });
 
-it('CA-030 PublicKeyCredential should be a function with mobile emulation', async ({ contextFactory, browserName, server }) => {
+it('CA-032 PublicKeyCredential should be a function with mobile emulation', async ({ contextFactory, browserName, server }) => {
   it.skip(browserName !== 'webkit');
   const context = await contextFactory({ isMobile: true });
   const page = await context.newPage();
@@ -511,7 +511,7 @@ it('CA-030 PublicKeyCredential should be a function with mobile emulation', asyn
   expect(await page.evaluate(() => typeof PublicKeyCredential)).toBe('function');
 });
 
-it('CA-031 should preserve an existing PublicKeyCredential implementation', async ({ page, browserName, server, toImpl }) => {
+it('CA-033 should preserve an existing PublicKeyCredential implementation', async ({ page, browserName, server, toImpl }) => {
   it.skip(browserName !== 'webkit');
   await page.goto(server.EMPTY_PAGE);
   const script = toImpl(page).delegate._publicKeyCredentialScript();
