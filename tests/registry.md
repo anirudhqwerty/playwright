@@ -662,6 +662,8 @@ subsystem, add a row to the Subsystems table. Then update this file:
 | `CA-029` | `library/capabilities.spec.ts` | should not crash on feature detection for PublicKeyCredential |
 | `CA-030` | `library/modernizr.spec.ts` | Safari Desktop |
 | `CA-031` | `library/modernizr.spec.ts` | Mobile Safari |
+| `CA-032` | `library/capabilities.spec.ts` | PublicKeyCredential should be a function with mobile emulation |
+| `CA-033` | `library/capabilities.spec.ts` | should preserve an existing PublicKeyCredential implementation |
 
 ### CC — Client certificates
 
