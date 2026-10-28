@@ -482,9 +482,43 @@ it('CA-029 should not crash on feature detection for PublicKeyCredential', {
   }
 }, async ({ page, server }) => {
   await page.goto(server.EMPTY_PAGE);
+  expect(await page.evaluate(() => typeof PublicKeyCredential)).toBe('function');
+  expect(await page.evaluate(() => ({}) instanceof PublicKeyCredential)).toBe(false);
+  expect(await page.evaluate(() => {
+    try {
+      new PublicKeyCredential();
+      return false;
+    } catch (error) {
+      return error instanceof TypeError;
+    }
+  })).toBe(true);
   await page.evaluate(async () => {
-    await PublicKeyCredential.getClientCapabilities();
-    await PublicKeyCredential.isConditionalMediationAvailable();
-    await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    const capabilities = await PublicKeyCredential.getClientCapabilities();
+    if (!capabilities || typeof capabilities !== 'object')
+      throw new Error('Expected client capabilities');
+    if (typeof await PublicKeyCredential.isConditionalMediationAvailable() !== 'boolean')
+      throw new Error('Expected conditional mediation availability');
+    if (typeof await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() !== 'boolean')
+      throw new Error('Expected platform authenticator availability');
   });
+});
+
+it('CA-030 PublicKeyCredential should be a function with mobile emulation', async ({ contextFactory, browserName, server }) => {
+  it.skip(browserName !== 'webkit');
+  const context = await contextFactory({ isMobile: true });
+  const page = await context.newPage();
+  await page.goto(server.EMPTY_PAGE);
+  expect(await page.evaluate(() => typeof PublicKeyCredential)).toBe('function');
+});
+
+it('CA-031 should preserve an existing PublicKeyCredential implementation', async ({ page, browserName, server, toImpl }) => {
+  it.skip(browserName !== 'webkit');
+  await page.goto(server.EMPTY_PAGE);
+  const script = toImpl(page)._delegate._publicKeyCredentialScript();
+  expect(await page.evaluate(script => {
+    class ExistingPublicKeyCredential {}
+    window.PublicKeyCredential = ExistingPublicKeyCredential as any;
+    eval(script);
+    return window.PublicKeyCredential === ExistingPublicKeyCredential as any;
+  }, script)).toBe(true);
 });
