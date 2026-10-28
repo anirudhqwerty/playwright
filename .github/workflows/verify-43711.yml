@@ -4,6 +4,7 @@ on:
     branches: [verify/43711-webkit-publickeycredential]
 jobs:
   linux:
+    if: "!contains(github.event.head_commit.message, '[windows-only]')"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -79,6 +80,7 @@ jobs:
           mkdir -p evidence
           git rev-parse HEAD > evidence/revision.txt
           node --version > evidence/node.txt
+          git fetch --depth=1 origin f9a841f968dd9a4e315df2ec2930da1952971667
           for file in packages/playwright-core/src/server/webkit/wkPage.ts packages/playwright-core/src/server/webkit/webview/wvPage.ts; do
             git show f9a841f968dd9a4e315df2ec2930da1952971667:"$file" > "$file"
           done
